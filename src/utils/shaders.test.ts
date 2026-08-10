@@ -24,23 +24,29 @@ test('water material reflects a skybox-synchronized panorama when available', ()
   assert.match(material.fragmentShader, /uHasSkyReflection/);
   assert.doesNotMatch(material.fragmentShader, /uEnvironmentMap/);
   assert.match(material.fragmentShader, /directionToEquirectUv/);
+  assert.match(material.fragmentShader, /0\.5 - asin/);
   assert.match(material.fragmentShader, /sampleNormalLayer/);
 
   material.dispose();
 });
 
-test('water material uses layered normals, stable shore depth, and no offshore foam', () => {
+test('water material uses a fast reflective ocean path with shoreline foam', () => {
   const material = createCustomWaterMaterial(BIOME_PRESETS[0]);
 
   assert.ok(material.uniforms.uDeepWaterColor);
   assert.ok(material.uniforms.uSurfaceWaterColor);
+  assert.ok(material.uniforms.uShallowWaterColor);
+  assert.ok(material.uniforms.uFoamColor);
   assert.ok(material.uniforms.uNormalStrength);
   assert.ok(material.uniforms.uReflectionStrength);
   assert.match(material.fragmentShader, /blendNormalLayers/);
-  assert.match(material.fragmentShader, /fbm/);
+  assert.match(material.fragmentShader, /shoreFoam/);
+  assert.doesNotMatch(material.fragmentShader, /sunPath/);
+  assert.doesNotMatch(material.fragmentShader, /uSunPathStrength/);
+  assert.doesNotMatch(material.fragmentShader, /islandDistance \* 0\.42/);
+  assert.doesNotMatch(material.fragmentShader, /fbm/);
   assert.doesNotMatch(material.fragmentShader, /accumulateWaveSlope/);
   assert.match(material.fragmentShader, /float fresnelSchlick/);
-  assert.doesNotMatch(material.fragmentShader, /foam/i);
   assert.equal(material.transparent, false);
   assert.equal(material.depthWrite, false);
   assert.equal(material.polygonOffset, true);

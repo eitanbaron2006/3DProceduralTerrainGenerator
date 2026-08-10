@@ -50,23 +50,36 @@ test('keeps the default horizon centered and the ocean cutoff below half a perce
   ).getOceanViewConfig;
 
   assert.equal(typeof getOceanViewConfig, 'function');
-  const config = (getOceanViewConfig as (seaLevel: number) => {
+  const sunsetSunDirection: [number, number, number] = [0.8073, 0.1794, 0.5623];
+  const config = (getOceanViewConfig as (
+    seaLevel: number,
+    sunDirection?: [number, number, number]
+  ) => {
     cameraPosition: { x: number; y: number; z: number };
     target: { x: number; y: number; z: number };
     cameraNear: number;
     cameraFar: number;
     oceanSize: number;
+    maxDistance: number;
     horizonGapFraction: number;
-  })(8);
+  })(8, sunsetSunDirection);
 
   assert.equal(config.cameraPosition.y, config.target.y);
+  const forwardX = config.target.x - config.cameraPosition.x;
+  const forwardZ = config.target.z - config.cameraPosition.z;
+  const forwardLength = Math.hypot(forwardX, forwardZ);
+  const forwardDotSun =
+    (forwardX / forwardLength) * sunsetSunDirection[0]
+    + (forwardZ / forwardLength) * sunsetSunDirection[2];
+  assert.ok(forwardDotSun > 0.98);
+  assert.ok(config.maxDistance >= 900);
   assert.ok(config.cameraNear >= 1);
   assert.ok(config.cameraFar / config.cameraNear <= 10000);
   assert.ok(config.oceanSize / 2 > config.cameraFar);
   assert.ok(config.horizonGapFraction < 0.005);
 });
 
-test('renders visible HDRI skyboxes as a crisp scene background', () => {
+test('renders visible HDRI skyboxes from the same equirectangular texture used by water', () => {
   const getSkyboxRenderConfig = (
     viewportModule as unknown as Record<string, unknown>
   ).getSkyboxRenderConfig;
@@ -82,7 +95,7 @@ test('renders visible HDRI skyboxes as a crisp scene background', () => {
   })();
 
   assert.equal(config.backgroundBlurriness, 0);
-  assert.equal(config.mapping, 'CubeReflectionMapping');
+  assert.equal(config.mapping, 'EquirectangularReflectionMapping');
   assert.equal(config.colorSpace, 'SRGBColorSpace');
   assert.equal(config.minFilter, 'LinearFilter');
   assert.equal(config.magFilter, 'LinearFilter');
@@ -121,14 +134,18 @@ test('uses renderer settings that preserve viewport performance', () => {
 
   assert.equal(typeof getRendererQualityConfig, 'function');
   const config = (getRendererQualityConfig as () => {
+    antialias: boolean;
     preserveDrawingBuffer: boolean;
     maxPixelRatio: number;
+    shadowMapEnabled: boolean;
     shadowMapSize: number;
     shadowsAutoUpdate: boolean;
   })();
 
+  assert.equal(config.antialias, false);
   assert.equal(config.preserveDrawingBuffer, false);
   assert.ok(config.maxPixelRatio <= 1);
+  assert.equal(config.shadowMapEnabled, false);
   assert.ok(config.shadowMapSize <= 1024);
   assert.equal(config.shadowsAutoUpdate, false);
 });

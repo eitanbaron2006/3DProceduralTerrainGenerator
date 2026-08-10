@@ -23,12 +23,12 @@ export const BIOME_PRESETS: BiomeConfig[] = [
     fogColor: '#d6f0f7',
     skyColor: '#38bdf8',
     sunColor: '#fffbe8',
-    waterColor: '#06b6d4',
-    waterFoamColor: '#f0fdf4',
+    waterColor: '#0b4f65',
+    waterFoamColor: '#edf8f6',
     layers: [
-      { name: 'Sand Beach & Reef', color: '#eab308', minHeight: 0, maxHeight: 0.2, minSlope: 0.8, maxSlope: 1 },
-      { name: 'Jungle Canopy', color: '#15803d', minHeight: 0.2, maxHeight: 0.65, minSlope: 0.5, maxSlope: 1 },
-      { name: 'Basalt Peak', color: '#334155', minHeight: 0.65, maxHeight: 1.0, minSlope: 0, maxSlope: 0.6 }
+      { name: 'Sand Beach & Reef', color: '#c9a85f', minHeight: 0, maxHeight: 0.18, minSlope: 0.78, maxSlope: 1 },
+      { name: 'Jungle Canopy', color: '#245132', minHeight: 0.18, maxHeight: 0.62, minSlope: 0.48, maxSlope: 1 },
+      { name: 'Basalt Peak', color: '#5d625d', minHeight: 0.62, maxHeight: 1.0, minSlope: 0, maxSlope: 0.62 }
     ]
   },
   {

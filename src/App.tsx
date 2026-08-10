@@ -19,29 +19,46 @@ import { ExportModal } from './components/Modals/ExportModal';
 import { DocumentationModal } from './components/Modals/DocumentationModal';
 import { Mountain, Palette, Waves, Paintbrush, Cpu, Download } from 'lucide-react';
 
+export const DEFAULT_BIOME_ID = 'tropical';
+export const DEFAULT_ENVIRONMENT_ID: EnvironmentId = 'sky-on-fire';
+
+export const DEFAULT_NOISE_SETTINGS: NoiseSettings = {
+  seed: 42,
+  scale: 5.8,
+  octaves: 5,
+  persistance: 0.45,
+  lacunarity: 2.2,
+  heightMultiplier: 26.0,
+  exponent: 1.15,
+  ridgeWeight: 0.18,
+  terraces: 0,
+  islandGradient: true
+};
+
+export const DEFAULT_WATER_SETTINGS: WaterSettings = {
+  enabled: true,
+  level: 8.0,
+  transparency: 0.8,
+  waveSpeed: 0.55,
+  waveHeight: 0.38,
+  color: '#0b4f65',
+  shallowColor: '#42c6bf',
+  foamWidth: 0.5
+};
+
 export default function App() {
-  const defaultEnvironmentId: EnvironmentId = 'lakeside-sunrise';
+  const defaultEnvironmentId: EnvironmentId = DEFAULT_ENVIRONMENT_ID;
   const defaultEnvironment = getEnvironmentPreset(defaultEnvironmentId);
+  const defaultBiome = BIOME_PRESETS.find((biome) => biome.id === DEFAULT_BIOME_ID) ?? BIOME_PRESETS[0];
 
   // State Initialization
   const [currentBiome, setCurrentBiome] = useState<BiomeConfig>(
-    applyEnvironmentAtmosphereToBiome(BIOME_PRESETS[0], defaultEnvironment)
+    applyEnvironmentAtmosphereToBiome(defaultBiome, defaultEnvironment)
   );
   const [environmentId, setEnvironmentId] = useState<EnvironmentId>(defaultEnvironmentId);
   const environment = getEnvironmentPreset(environmentId);
 
-  const [noise, setNoise] = useState<NoiseSettings>({
-    seed: 42,
-    scale: 6.5,
-    octaves: 5,
-    persistance: 0.45,
-    lacunarity: 2.2,
-    heightMultiplier: 35.0,
-    exponent: 1.2,
-    ridgeWeight: 0.25,
-    terraces: 0,
-    islandGradient: false
-  });
+  const [noise, setNoise] = useState<NoiseSettings>(DEFAULT_NOISE_SETTINGS);
 
   const [erosion, setErosion] = useState<ErosionSettings>({
     droplets: 12000,
@@ -53,16 +70,7 @@ export default function App() {
     radius: 3
   });
 
-  const [water, setWater] = useState<WaterSettings>({
-    enabled: true,
-    level: 8.0,
-    transparency: 0.8,
-    waveSpeed: 1.2,
-    waveHeight: 0.6,
-    color: '#1d5a7d',
-    shallowColor: '#38bdf8',
-    foamWidth: 0.5
-  });
+  const [water, setWater] = useState<WaterSettings>(DEFAULT_WATER_SETTINGS);
 
   const [sculpt, setSculpt] = useState<SculptBrush>({
     active: false,

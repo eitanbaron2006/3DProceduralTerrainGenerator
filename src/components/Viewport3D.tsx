@@ -22,15 +22,26 @@ export function getInfiniteWaterPosition(x: number, z: number, snapSize = 16) {
   };
 }
 
-export function getOceanViewConfig(seaLevel: number) {
-  const verticalFovDegrees = 55;
+export function getOceanViewConfig(
+  seaLevel: number,
+  sunDirection: [number, number, number] = [0.8073, 0.1794, 0.5623]
+) {
+  const verticalFovDegrees = 52;
   const cameraNear = 1;
   const cameraFar = 9000;
   const oceanSize = 24000;
-  const maxDistance = 600;
+  const maxDistance = 1100;
   const maxPolarAngle = Math.PI / 2 - 0.005;
-  const cameraPosition = { x: 0, y: 30, z: 150 };
-  const target = { x: 0, y: 30, z: 0 };
+  const cameraDistance = 285;
+  const sunHorizontalLength = Math.hypot(sunDirection[0], sunDirection[2]) || 1;
+  const sunForwardX = sunDirection[0] / sunHorizontalLength;
+  const sunForwardZ = sunDirection[2] / sunHorizontalLength;
+  const cameraPosition = {
+    x: -sunForwardX * cameraDistance,
+    y: 44,
+    z: -sunForwardZ * cameraDistance
+  };
+  const target = { x: 0, y: 44, z: 0 };
   const maxCameraY = target.y + maxDistance * Math.cos(maxPolarAngle);
   const heightAboveWater = Math.max(0, maxCameraY - seaLevel);
   const angularGap = Math.asin(Math.min(0.999, heightAboveWater / cameraFar));
@@ -53,7 +64,7 @@ export function getOceanViewConfig(seaLevel: number) {
 export function getSkyboxRenderConfig() {
   return {
     backgroundBlurriness: 0,
-    mapping: 'CubeReflectionMapping',
+    mapping: 'EquirectangularReflectionMapping',
     colorSpace: 'SRGBColorSpace',
     minFilter: 'LinearFilter',
     magFilter: 'LinearFilter',
@@ -75,19 +86,21 @@ export function getWaterReflectionTextureConfig() {
 
 export function getRendererQualityConfig() {
   return {
+    antialias: false,
     preserveDrawingBuffer: false,
     maxPixelRatio: 1,
-    shadowMapSize: 1024,
+    shadowMapEnabled: false,
+    shadowMapSize: 512,
     shadowsAutoUpdate: false
   };
 }
 
 export function getStableWaterRenderConfig(seaLevel: number) {
   return {
-    renderLevel: seaLevel - 0.1,
+    renderLevel: seaLevel - 0.18,
     renderOrder: 1,
-    polygonOffsetFactor: 2,
-    polygonOffsetUnits: 8
+    polygonOffsetFactor: 3,
+    polygonOffsetUnits: 12
   };
 }
 
@@ -137,7 +150,6 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const terrainMaterialRef = useRef<THREE.ShaderMaterial | null>(null);
   const brushMarkerRef = useRef<THREE.Mesh | null>(null);
   const skyboxTextureRef = useRef<THREE.Texture | null>(null);
-  const waterReflectionTextureRef = useRef<THREE.Texture | null>(null);
   const waterNormalTextureRef = useRef<THREE.Texture | null>(null);
   const skyboxLoadIdRef = useRef(0);
   const atmosphereRef = useRef(getEffectiveAtmosphere(biome, environment));
@@ -157,13 +169,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
     const initialAspect = height > 0 ? width / height : 16 / 9;
-    const viewConfig = getOceanViewConfig(water.level);
-
     // 1. Scene
     const scene = new THREE.Scene();
     const skyboxRenderConfig = getSkyboxRenderConfig();
     const rendererQualityConfig = getRendererQualityConfig();
     const atmosphere = getEffectiveAtmosphere(biome, environment);
+    const viewConfig = getOceanViewConfig(water.level, atmosphere.sunDirection);
     scene.background = new THREE.Color(atmosphere.skyColor);
     scene.backgroundBlurriness = skyboxRenderConfig.backgroundBlurriness;
     scene.backgroundIntensity = atmosphere.skyboxIntensity;
@@ -188,7 +199,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
     // 3. Renderer
     const renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: rendererQualityConfig.antialias,
       powerPreference: 'high-performance',
       preserveDrawingBuffer: rendererQualityConfig.preserveDrawingBuffer
     });
@@ -196,8 +207,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, rendererQualityConfig.maxPixelRatio));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.9;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = rendererQualityConfig.shadowMapEnabled;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.shadowMap.autoUpdate = rendererQualityConfig.shadowsAutoUpdate;
     renderer.shadowMap.needsUpdate = true;
     container.appendChild(renderer.domElement);
@@ -208,7 +219,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = viewConfig.maxPolarAngle;
-    controls.minDistance = 5;
+    controls.minDistance = 60;
     controls.maxDistance = viewConfig.maxDistance;
     controls.target.set(viewConfig.target.x, viewConfig.target.y, viewConfig.target.z);
     controls.update();
@@ -221,7 +232,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
     const sunLight = new THREE.DirectionalLight(atmosphere.sunColor, atmosphere.sunLightIntensity);
     sunLight.position.copy(getAtmosphereSunVector(atmosphere).multiplyScalar(300));
-    sunLight.castShadow = true;
+    sunLight.castShadow = rendererQualityConfig.shadowMapEnabled;
     sunLight.shadow.mapSize.width = rendererQualityConfig.shadowMapSize;
     sunLight.shadow.mapSize.height = rendererQualityConfig.shadowMapSize;
     sunLight.shadow.camera.near = 10;
@@ -339,8 +350,6 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       skyboxLoadIdRef.current++;
       skyboxTextureRef.current?.dispose();
       skyboxTextureRef.current = null;
-      waterReflectionTextureRef.current?.dispose();
-      waterReflectionTextureRef.current = null;
       ambientLightRef.current = null;
       sunLightRef.current = null;
       waterNormalTextureRef.current?.dispose();
@@ -393,7 +402,24 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
   }, [biome, environment]);
 
-  // Load the selected local cubemap for the visible skybox.
+  // Reframe the default composition whenever a new HDRI is selected so the
+  // visible sky, low sun, and water reflection share the same screen azimuth.
+  useEffect(() => {
+    if (!cameraRef.current || !controlsRef.current) return;
+
+    const viewConfig = getOceanViewConfig(water.level, environment.atmosphere.sunDirection);
+    cameraRef.current.position.set(
+      viewConfig.cameraPosition.x,
+      viewConfig.cameraPosition.y,
+      viewConfig.cameraPosition.z
+    );
+    cameraRef.current.lookAt(viewConfig.target.x, viewConfig.target.y, viewConfig.target.z);
+    controlsRef.current.target.set(viewConfig.target.x, viewConfig.target.y, viewConfig.target.z);
+    controlsRef.current.update();
+  }, [environment, water.level]);
+
+  // Load one local equirectangular HDRI JPG for both the visible skybox and water reflection.
+  // Sharing the exact same Texture keeps the reflected azimuth locked to the visible sky.
   useEffect(() => {
     if (!sceneRef.current) return;
 
@@ -404,50 +430,18 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     let cancelled = false;
 
     const previousSkyboxAtLoadStart = skyboxTextureRef.current;
-    const previousWaterReflectionAtLoadStart = waterReflectionTextureRef.current;
     skyboxTextureRef.current = null;
-    waterReflectionTextureRef.current = null;
     if (previousSkyboxAtLoadStart) {
       scene.background = new THREE.Color(atmosphereRef.current.skyColor);
       previousSkyboxAtLoadStart.dispose();
     }
-    previousWaterReflectionAtLoadStart?.dispose();
     if (waterMaterialRef.current) {
       waterMaterialRef.current.uniforms.uSkyReflectionMap.value = null;
       waterMaterialRef.current.uniforms.uHasSkyReflection.value = false;
     }
 
-    new THREE.CubeTextureLoader().load(
-      environment.skyboxFacePaths,
-      (texture) => {
-        if (cancelled || loadId !== skyboxLoadIdRef.current) {
-          texture.dispose();
-          return;
-        }
-
-        texture.mapping = THREE.CubeReflectionMapping;
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.minFilter = THREE.LinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-        texture.generateMipmaps = false;
-        texture.needsUpdate = true;
-
-        const previousSkyboxTexture = skyboxTextureRef.current;
-        skyboxTextureRef.current = texture;
-        scene.background = texture;
-        scene.backgroundBlurriness = skyboxRenderConfig.backgroundBlurriness;
-        scene.backgroundIntensity = atmosphereRef.current.skyboxIntensity;
-        previousSkyboxTexture?.dispose();
-      },
-      undefined,
-      (error) => {
-        if (cancelled || loadId !== skyboxLoadIdRef.current) return;
-        console.error(`Unable to load skybox cubemap: ${environment.name}`, error);
-      }
-    );
-
     new THREE.TextureLoader().load(
-      environment.waterReflectionPath,
+      environment.skyboxPath,
       (texture) => {
         if (cancelled || loadId !== skyboxLoadIdRef.current) {
           texture.dispose();
@@ -463,18 +457,21 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         texture.generateMipmaps = waterReflectionConfig.generateMipmaps;
         texture.needsUpdate = true;
 
-        const previousWaterReflectionTexture = waterReflectionTextureRef.current;
-        waterReflectionTextureRef.current = texture;
+        const previousSkyboxTexture = skyboxTextureRef.current;
+        skyboxTextureRef.current = texture;
+        scene.background = texture;
+        scene.backgroundBlurriness = skyboxRenderConfig.backgroundBlurriness;
+        scene.backgroundIntensity = atmosphereRef.current.skyboxIntensity;
         if (waterMaterialRef.current) {
           waterMaterialRef.current.uniforms.uSkyReflectionMap.value = texture;
           waterMaterialRef.current.uniforms.uHasSkyReflection.value = true;
         }
-        previousWaterReflectionTexture?.dispose();
+        previousSkyboxTexture?.dispose();
       },
       undefined,
       (error) => {
         if (cancelled || loadId !== skyboxLoadIdRef.current) return;
-        console.error(`Unable to load synchronized water reflection map: ${environment.name}`, error);
+        console.error(`Unable to load synchronized HDRI sky/reflection map: ${environment.name}`, error);
       }
     );
 
@@ -542,8 +539,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     geometry.computeBoundingSphere();
 
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
 
     // Optional Bounding Box helper
     if (lod.showChunkBounds) {
@@ -590,8 +587,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       waterMat.polygonOffsetUnits = waterRenderConfig.polygonOffsetUnits;
       waterMat.uniforms.uWaterNormalMap.value = waterNormalTextureRef.current;
       waterMat.uniforms.uHasWaterNormalMap.value = Boolean(waterNormalTextureRef.current);
-      waterMat.uniforms.uSkyReflectionMap.value = waterReflectionTextureRef.current;
-      waterMat.uniforms.uHasSkyReflection.value = Boolean(waterReflectionTextureRef.current);
+      waterMat.uniforms.uSkyReflectionMap.value = skyboxTextureRef.current;
+      waterMat.uniforms.uHasSkyReflection.value = Boolean(skyboxTextureRef.current);
       waterMat.uniforms.uSunDirection.value.copy(getAtmosphereSunVector(atmosphereRef.current));
       waterMaterialRef.current = waterMat;
 
