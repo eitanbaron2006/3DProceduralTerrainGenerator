@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import * as THREE from 'three';
 import { BiomeConfig, NoiseSettings, ErosionSettings, WaterSettings, SculptBrush, LODSettings, PerformanceStats, ActiveTab, EnvironmentId } from './types';
 import { BIOME_PRESETS } from './data/biomes';
-import { getEnvironmentPreset } from './data/environments';
+import { ENVIRONMENT_PRESETS, getEnvironmentPreset } from './data/environments';
 import { simulateHydraulicErosion } from './utils/erosion';
 import { Viewport3D } from './components/Viewport3D';
 import { Header } from './components/Header';
@@ -221,7 +221,10 @@ export default function App() {
             {activeTab === 'biomes' && (
               <BiomeControls
                 currentBiome={currentBiome}
+                environments={ENVIRONMENT_PRESETS}
+                selectedEnvironmentId={environmentId}
                 onSelectBiome={handleSelectBiome}
+                onSelectEnvironment={setEnvironmentId}
                 onUpdateBiome={setCurrentBiome}
               />
             )}

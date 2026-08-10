@@ -1,17 +1,23 @@
 import React from 'react';
-import { BiomeConfig, BiomeType } from '../../types';
+import { BiomeConfig, EnvironmentId, EnvironmentPreset } from '../../types';
 import { BIOME_PRESETS } from '../../data/biomes';
 import { Palette, Sun, Cloud, Layers } from 'lucide-react';
 
 interface BiomeControlsProps {
   currentBiome: BiomeConfig;
+  environments: EnvironmentPreset[];
+  selectedEnvironmentId: EnvironmentId;
   onSelectBiome: (biome: BiomeConfig) => void;
+  onSelectEnvironment: (id: EnvironmentId) => void;
   onUpdateBiome: (updatedBiome: BiomeConfig) => void;
 }
 
 export const BiomeControls: React.FC<BiomeControlsProps> = ({
   currentBiome,
+  environments,
+  selectedEnvironmentId,
   onSelectBiome,
+  onSelectEnvironment,
   onUpdateBiome
 }) => {
   const handleLayerColorChange = (index: number, newColor: string) => {
@@ -67,6 +73,41 @@ export const BiomeControls: React.FC<BiomeControlsProps> = ({
       <p className="text-xs text-slate-400 bg-slate-900/80 p-2.5 rounded-md border border-slate-800 italic">
         {currentBiome.description}
       </p>
+
+      {/* HDRI Environment Selector */}
+      <div className="pt-3 border-t border-slate-700/60 space-y-3">
+        <h4 className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+          <Cloud className="w-3.5 h-3.5 text-sky-300" /> HDRI Skybox
+        </h4>
+        <div className="grid grid-cols-2 gap-2">
+          {environments.map((environment) => {
+            const isSelected = environment.id === selectedEnvironmentId;
+            return (
+              <button
+                key={environment.id}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => onSelectEnvironment(environment.id)}
+                className={`rounded-lg border p-2.5 text-left transition-all ${
+                  isSelected
+                    ? 'bg-cyan-500/15 border-cyan-400 text-white shadow-md shadow-cyan-950/30'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white'
+                }`}
+              >
+                <span className="block text-[10px] uppercase tracking-wider text-cyan-300/80">
+                  {environment.timeOfDay}
+                </span>
+                <span className="mt-0.5 block truncate text-xs font-semibold">
+                  {environment.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-slate-500">
+          Skybox selection stays independent from biome presets.
+        </p>
+      </div>
 
       {/* Atmosphere Color Pickers */}
       <div className="pt-3 border-t border-slate-700/60 space-y-3">
