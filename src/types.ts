@@ -32,6 +32,19 @@ export interface EnvironmentPreset {
   name: string;
   timeOfDay: string;
   hdrPath: string;
+  skyboxPath: string;
+  atmosphere: AtmosphereConfig;
+}
+
+export interface AtmosphereConfig {
+  skyColor: string;
+  fogColor: string;
+  sunColor: string;
+  fogDensity: number;
+  backgroundIntensity: number;
+  environmentIntensity: number;
+  ambientLightIntensity: number;
+  sunLightIntensity: number;
 }
 
 export interface NoiseSettings {

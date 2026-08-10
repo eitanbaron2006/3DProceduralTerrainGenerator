@@ -62,3 +62,16 @@ test('keeps the default horizon centered and the ocean cutoff below half a perce
   assert.ok(config.oceanSize / 2 > config.cameraFar);
   assert.ok(config.horizonGapFraction < 0.005);
 });
+
+test('renders HDRI skyboxes without background blur', () => {
+  const getSkyboxRenderConfig = (
+    viewportModule as unknown as Record<string, unknown>
+  ).getSkyboxRenderConfig;
+
+  assert.equal(typeof getSkyboxRenderConfig, 'function');
+  const config = (getSkyboxRenderConfig as () => {
+    backgroundBlurriness: number;
+  })();
+
+  assert.equal(config.backgroundBlurriness, 0);
+});

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { BiomeConfig, NoiseSettings, WaterSettings, LODSettings, SculptBrush, PerformanceStats, EnvironmentPreset } from '../types';
+import { getEffectiveAtmosphere } from '../data/environments';
 import { createSeededNoise, getProceduralHeight } from '../utils/noise';
 import { createCustomTerrainMaterial, createCustomWaterMaterial } from '../utils/shaders';
 
@@ -48,6 +49,12 @@ export function getOceanViewConfig(seaLevel: number) {
   };
 }
 
+export function getSkyboxRenderConfig() {
+  return {
+    backgroundBlurriness: 0
+  };
+}
+
 interface Viewport3DProps {
   biome: BiomeConfig;
   environment: EnvironmentPreset;
@@ -80,6 +87,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
+  const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
 
   const terrainGroupRef = useRef<THREE.Group | null>(null);
   const waterMeshRef = useRef<THREE.Mesh | null>(null);
@@ -88,10 +97,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const brushMarkerRef = useRef<THREE.Mesh | null>(null);
   const environmentTextureRef = useRef<THREE.DataTexture | null>(null);
   const environmentTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
+  const skyboxTextureRef = useRef<THREE.Texture | null>(null);
   const waterNormalTextureRef = useRef<THREE.Texture | null>(null);
   const environmentLoadIdRef = useRef(0);
-  const biomeSkyColorRef = useRef(biome.skyColor);
-  biomeSkyColorRef.current = biome.skyColor;
+  const atmosphereRef = useRef(getEffectiveAtmosphere(biome, environment));
+  atmosphereRef.current = getEffectiveAtmosphere(biome, environment);
 
   const isMouseDownRef = useRef(false);
   const lastTimeRef = useRef(performance.now());
@@ -111,10 +121,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
     // 1. Scene
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(biome.skyColor);
-    scene.backgroundIntensity = 0.72;
-    scene.environmentIntensity = 0.7;
-    scene.fog = new THREE.FogExp2(biome.fogColor, 0.0004);
+    const skyboxRenderConfig = getSkyboxRenderConfig();
+    const atmosphere = getEffectiveAtmosphere(biome, environment);
+    scene.background = new THREE.Color(atmosphere.skyColor);
+    scene.backgroundBlurriness = skyboxRenderConfig.backgroundBlurriness;
+    scene.backgroundIntensity = atmosphere.backgroundIntensity;
+    scene.environmentIntensity = atmosphere.environmentIntensity;
+    scene.fog = new THREE.FogExp2(atmosphere.fogColor, atmosphere.fogDensity);
     sceneRef.current = scene;
 
     // 2. Camera
@@ -159,10 +172,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     controlsRef.current = controls;
 
     // 5. Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+    const ambientLight = new THREE.AmbientLight(0xffffff, atmosphere.ambientLightIntensity);
     scene.add(ambientLight);
+    ambientLightRef.current = ambientLight;
 
-    const sunLight = new THREE.DirectionalLight(biome.sunColor, 1.3);
+    const sunLight = new THREE.DirectionalLight(atmosphere.sunColor, atmosphere.sunLightIntensity);
     sunLight.position.set(120, 180, 80);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
@@ -175,6 +189,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     sunLight.shadow.camera.top = shadowDist;
     sunLight.shadow.camera.bottom = -shadowDist;
     scene.add(sunLight);
+    sunLightRef.current = sunLight;
 
     // 6. Terrain Group
     const terrainGroup = new THREE.Group();
@@ -281,8 +296,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       environmentLoadIdRef.current++;
       environmentTextureRef.current?.dispose();
       environmentTargetRef.current?.dispose();
+      skyboxTextureRef.current?.dispose();
       environmentTextureRef.current = null;
       environmentTargetRef.current = null;
+      skyboxTextureRef.current = null;
+      ambientLightRef.current = null;
+      sunLightRef.current = null;
       waterNormalTextureRef.current?.dispose();
       waterNormalTextureRef.current = null;
       cancelAnimationFrame(animationFrameId);
@@ -292,14 +311,38 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     };
   }, []);
 
-  // Update Biome & Sky Colors
+  // Update biome terrain colors and skybox-driven atmosphere.
   useEffect(() => {
     if (!sceneRef.current) return;
+    const atmosphere = getEffectiveAtmosphere(biome, environment);
+
     if (!environmentTextureRef.current) {
-      sceneRef.current.background = new THREE.Color(biome.skyColor);
+      sceneRef.current.background = new THREE.Color(atmosphere.skyColor);
     }
-    sceneRef.current.fog = new THREE.FogExp2(biome.fogColor, 0.0004);
-  }, [biome]);
+    sceneRef.current.backgroundIntensity = atmosphere.backgroundIntensity;
+    sceneRef.current.environmentIntensity = atmosphere.environmentIntensity;
+    sceneRef.current.fog = new THREE.FogExp2(atmosphere.fogColor, atmosphere.fogDensity);
+
+    ambientLightRef.current?.color.set(0xffffff);
+    if (ambientLightRef.current) {
+      ambientLightRef.current.intensity = atmosphere.ambientLightIntensity;
+    }
+
+    sunLightRef.current?.color.set(atmosphere.sunColor);
+    if (sunLightRef.current) {
+      sunLightRef.current.intensity = atmosphere.sunLightIntensity;
+    }
+
+    if (terrainMaterialRef.current) {
+      terrainMaterialRef.current.uniforms.uFogColor.value.set(atmosphere.fogColor);
+      terrainMaterialRef.current.uniforms.uSunColor.value.set(atmosphere.sunColor);
+    }
+
+    if (waterMaterialRef.current) {
+      waterMaterialRef.current.uniforms.uSkyFallback.value.set(atmosphere.skyColor);
+      waterMaterialRef.current.uniforms.uSunColor.value.set(atmosphere.sunColor);
+    }
+  }, [biome, environment]);
 
   // Load the selected local HDRI for the sky, environment lighting, and water reflection.
   useEffect(() => {
@@ -312,12 +355,21 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
 
+    const previousSkyboxAtLoadStart = skyboxTextureRef.current;
+    skyboxTextureRef.current = null;
+    if (previousSkyboxAtLoadStart) {
+      scene.background = new THREE.Color(atmosphereRef.current.skyColor);
+      previousSkyboxAtLoadStart.dispose();
+    }
+
     const clearEnvironment = () => {
       environmentTextureRef.current?.dispose();
       environmentTargetRef.current?.dispose();
       environmentTextureRef.current = null;
       environmentTargetRef.current = null;
-      scene.background = new THREE.Color(biomeSkyColorRef.current);
+      if (!skyboxTextureRef.current) {
+        scene.background = new THREE.Color(atmosphereRef.current.skyColor);
+      }
       scene.environment = null;
 
       if (waterMaterialRef.current) {
@@ -344,7 +396,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         environmentTextureRef.current = texture;
         environmentTargetRef.current = environmentTarget;
 
-        scene.background = texture;
+        if (!skyboxTextureRef.current) {
+          scene.background = texture;
+        }
         scene.environment = environmentTarget.texture;
 
         if (waterMaterialRef.current) {
@@ -361,6 +415,32 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         if (cancelled || loadId !== environmentLoadIdRef.current) return;
         clearEnvironment();
         console.error(`Unable to load HDRI environment: ${environment.name}`, error);
+      }
+    );
+
+    new THREE.TextureLoader().load(
+      environment.skyboxPath,
+      (texture) => {
+        if (cancelled || loadId !== environmentLoadIdRef.current) {
+          texture.dispose();
+          return;
+        }
+
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.generateMipmaps = false;
+
+        const previousSkyboxTexture = skyboxTextureRef.current;
+        skyboxTextureRef.current = texture;
+        scene.background = texture;
+        previousSkyboxTexture?.dispose();
+      },
+      undefined,
+      (error) => {
+        if (cancelled || loadId !== environmentLoadIdRef.current) return;
+        console.error(`Unable to load skybox texture: ${environment.name}`, error);
       }
     );
 

@@ -105,7 +105,7 @@ export const BiomeControls: React.FC<BiomeControlsProps> = ({
           })}
         </div>
         <p className="text-[11px] text-slate-500">
-          Skybox selection stays independent from biome presets.
+          Skybox sets the atmosphere; terrain biome stays separate.
         </p>
       </div>
 

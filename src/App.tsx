@@ -2,7 +2,11 @@ import React, { useState, useRef } from 'react';
 import * as THREE from 'three';
 import { BiomeConfig, NoiseSettings, ErosionSettings, WaterSettings, SculptBrush, LODSettings, PerformanceStats, ActiveTab, EnvironmentId } from './types';
 import { BIOME_PRESETS } from './data/biomes';
-import { ENVIRONMENT_PRESETS, getEnvironmentPreset } from './data/environments';
+import {
+  ENVIRONMENT_PRESETS,
+  applyEnvironmentAtmosphereToBiome,
+  getEnvironmentPreset
+} from './data/environments';
 import { simulateHydraulicErosion } from './utils/erosion';
 import { Viewport3D } from './components/Viewport3D';
 import { Header } from './components/Header';
@@ -16,9 +20,14 @@ import { DocumentationModal } from './components/Modals/DocumentationModal';
 import { Mountain, Palette, Waves, Paintbrush, Cpu, Download } from 'lucide-react';
 
 export default function App() {
+  const defaultEnvironmentId: EnvironmentId = 'lakeside-sunrise';
+  const defaultEnvironment = getEnvironmentPreset(defaultEnvironmentId);
+
   // State Initialization
-  const [currentBiome, setCurrentBiome] = useState<BiomeConfig>(BIOME_PRESETS[0]);
-  const [environmentId, setEnvironmentId] = useState<EnvironmentId>('lakeside-sunrise');
+  const [currentBiome, setCurrentBiome] = useState<BiomeConfig>(
+    applyEnvironmentAtmosphereToBiome(BIOME_PRESETS[0], defaultEnvironment)
+  );
+  const [environmentId, setEnvironmentId] = useState<EnvironmentId>(defaultEnvironmentId);
   const environment = getEnvironmentPreset(environmentId);
 
   const [noise, setNoise] = useState<NoiseSettings>({
@@ -113,8 +122,19 @@ export default function App() {
   };
 
   const handleSelectBiome = (biome: BiomeConfig) => {
-    setCurrentBiome(biome);
+    setCurrentBiome((prev) => ({
+      ...biome,
+      skyColor: prev.skyColor,
+      fogColor: prev.fogColor,
+      sunColor: prev.sunColor
+    }));
     setWater((prev) => ({ ...prev, color: biome.waterColor }));
+  };
+
+  const handleSelectEnvironment = (id: EnvironmentId) => {
+    const nextEnvironment = getEnvironmentPreset(id);
+    setEnvironmentId(id);
+    setCurrentBiome((prev) => applyEnvironmentAtmosphereToBiome(prev, nextEnvironment));
   };
 
   return (
@@ -224,7 +244,7 @@ export default function App() {
                 environments={ENVIRONMENT_PRESETS}
                 selectedEnvironmentId={environmentId}
                 onSelectBiome={handleSelectBiome}
-                onSelectEnvironment={setEnvironmentId}
+                onSelectEnvironment={handleSelectEnvironment}
                 onUpdateBiome={setCurrentBiome}
               />
             )}
