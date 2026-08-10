@@ -1,0 +1,6 @@
+{
+  "name": "3D Procedural Terrain & Biome Generator",
+  "description": "Professional WebGL terrain generator with biomes, custom water/terrain shaders, LOD chunk streaming, hydraulic erosion, and glTF/USDZ export for Three.js.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
