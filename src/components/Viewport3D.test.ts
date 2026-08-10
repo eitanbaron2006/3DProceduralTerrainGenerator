@@ -27,3 +27,19 @@ test('removes the renderer canvas from the captured container', () => {
   ) => void)(container, canvas);
   assert.equal(child, null);
 });
+
+test('snaps the infinite ocean origin around positive and negative camera positions', () => {
+  const getInfiniteWaterPosition = (
+    viewportModule as unknown as Record<string, unknown>
+  ).getInfiniteWaterPosition;
+
+  assert.equal(typeof getInfiniteWaterPosition, 'function');
+  const getPosition = getInfiniteWaterPosition as (
+    x: number,
+    z: number,
+    snapSize?: number
+  ) => { x: number; z: number };
+
+  assert.deepEqual(getPosition(17, -17, 16), { x: 16, z: -16 });
+  assert.deepEqual(getPosition(-9, 9, 16), { x: -16, z: 16 });
+});

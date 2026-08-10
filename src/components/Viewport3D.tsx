@@ -15,6 +15,13 @@ export function removeRendererCanvas(
   }
 }
 
+export function getInfiniteWaterPosition(x: number, z: number, snapSize = 16) {
+  return {
+    x: Math.round(x / snapSize) * snapSize,
+    z: Math.round(z / snapSize) * snapSize
+  };
+}
+
 interface Viewport3DProps {
   biome: BiomeConfig;
   environment: EnvironmentPreset;
@@ -181,6 +188,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       // Update Water Shader Uniforms
       if (waterMaterialRef.current) {
         waterMaterialRef.current.uniforms.uTime.value = now * 0.001;
+      }
+
+      if (waterMeshRef.current) {
+        const waterPosition = getInfiniteWaterPosition(camera.position.x, camera.position.z);
+        waterMeshRef.current.position.x = waterPosition.x;
+        waterMeshRef.current.position.z = waterPosition.z;
       }
 
       renderer.render(scene, camera);
@@ -381,8 +394,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     }
 
     if (water.enabled) {
-      const worldSize = 250;
-      const waterGeo = new THREE.PlaneGeometry(worldSize, worldSize, 64, 64);
+      const worldSize = 3200;
+      const waterGeo = new THREE.PlaneGeometry(worldSize, worldSize, 128, 128);
       waterGeo.rotateX(-Math.PI / 2);
 
       const waterMat = createCustomWaterMaterial(biome);

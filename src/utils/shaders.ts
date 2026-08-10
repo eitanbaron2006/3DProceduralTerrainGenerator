@@ -129,23 +129,23 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
 
     void main() {
       vUv = uv;
-      vec3 pos = position;
+      vec4 worldPos = modelMatrix * vec4(position, 1.0);
+      vec2 wavePosition = worldPos.xz;
 
-      // Animated wave displacement
-      float wave = sin(pos.x * 0.15 + uTime * uWaveSpeed) * cos(pos.z * 0.15 + uTime * uWaveSpeed * 0.8);
-      wave += sin(pos.x * 0.3 - uTime * uWaveSpeed * 1.2) * 0.5;
-      pos.y += wave * uWaveHeight;
+      // Anchor waves in world space so the camera-following mesh never drags them.
+      float wave = sin(wavePosition.x * 0.15 + uTime * uWaveSpeed) * cos(wavePosition.y * 0.15 + uTime * uWaveSpeed * 0.8);
+      wave += sin(wavePosition.x * 0.3 - uTime * uWaveSpeed * 1.2) * 0.5;
+      worldPos.y += wave * uWaveHeight;
 
-      vec4 worldPos = modelMatrix * vec4(pos, 1.0);
       vWorldPosition = worldPos.xyz;
 
       // World space wave normal
       vec3 n = vec3(
-        -cos(pos.x * 0.15 + uTime * uWaveSpeed) * 0.15 * uWaveHeight,
+        -cos(wavePosition.x * 0.15 + uTime * uWaveSpeed) * 0.15 * uWaveHeight,
         1.0,
-        -sin(pos.z * 0.15 + uTime * uWaveSpeed) * 0.15 * uWaveHeight
+        -sin(wavePosition.y * 0.15 + uTime * uWaveSpeed) * 0.15 * uWaveHeight
       );
-      vNormal = normalize(mat3(modelMatrix) * n);
+      vNormal = normalize(n);
 
       gl_Position = projectionMatrix * viewMatrix * worldPos;
     }
@@ -205,10 +205,10 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
         col = mix(col, uFoamColor, 0.4);
       }
 
-      // Distance fog (soft atmosphere beyond 200m)
+      // Fade the ocean into the atmospheric horizon before its geometry ends.
       float dist = length(vWorldPosition - cameraPosition);
-      float fogFactor = smoothstep(180.0, 700.0, dist) * 0.6;
-      col = mix(col, uFogColor, clamp(fogFactor, 0.0, 0.6));
+      float fogFactor = smoothstep(900.0, 1450.0, dist) * 0.92;
+      col = mix(col, uFogColor, clamp(fogFactor, 0.0, 0.92));
 
       gl_FragColor = vec4(col, 0.85);
     }
