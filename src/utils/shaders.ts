@@ -158,10 +158,20 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
     uniform vec3 uSunDirection;
     uniform vec3 uFogColor;
     uniform float uFogDensity;
+    uniform sampler2D uEnvironmentMap;
+    uniform bool uHasEnvironment;
 
     varying vec3 vWorldPosition;
     varying vec3 vNormal;
     varying vec2 vUv;
+
+    vec2 directionToEquirectUv(vec3 direction) {
+      vec3 dir = normalize(direction);
+      return vec2(
+        atan(dir.z, dir.x) / (2.0 * 3.14159265359) + 0.5,
+        asin(clamp(dir.y, -1.0, 1.0)) / 3.14159265359 + 0.5
+      );
+    }
 
     void main() {
       vec3 norm = normalize(vNormal);
@@ -172,6 +182,16 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
 
       // Base water color mix with sky reflection
       vec3 col = mix(uWaterColor, vec3(0.7, 0.85, 1.0), fresnel * 0.5);
+
+      if (uHasEnvironment) {
+        vec3 reflectionDirection = reflect(-viewDir, norm);
+        vec3 environmentColor = texture2D(
+          uEnvironmentMap,
+          directionToEquirectUv(reflectionDirection)
+        ).rgb;
+        environmentColor = environmentColor / (environmentColor + vec3(1.0));
+        col = mix(col, environmentColor, 0.18 + fresnel * 0.62);
+      }
 
       // Sun specular highlight
       vec3 sunDir = normalize(uSunDirection);
@@ -207,7 +227,9 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
       uWaveHeight: { value: 0.8 },
       uSunDirection: { value: new THREE.Vector3(120, 180, 80).normalize() },
       uFogColor: { value: new THREE.Color(biome.fogColor) },
-      uFogDensity: { value: 0.0004 }
+      uFogDensity: { value: 0.0004 },
+      uEnvironmentMap: { value: null },
+      uHasEnvironment: { value: false }
     }
   });
 }

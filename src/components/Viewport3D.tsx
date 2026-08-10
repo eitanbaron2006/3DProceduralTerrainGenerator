@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { BiomeConfig, NoiseSettings, WaterSettings, LODSettings, SculptBrush, PerformanceStats, EnvironmentPreset } from '../types';
 import { createSeededNoise, getProceduralHeight } from '../utils/noise';
 import { createCustomTerrainMaterial, createCustomWaterMaterial } from '../utils/shaders';
@@ -52,6 +53,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const waterMaterialRef = useRef<THREE.ShaderMaterial | null>(null);
   const terrainMaterialRef = useRef<THREE.ShaderMaterial | null>(null);
   const brushMarkerRef = useRef<THREE.Mesh | null>(null);
+  const environmentTextureRef = useRef<THREE.DataTexture | null>(null);
+  const environmentTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
+  const environmentLoadIdRef = useRef(0);
+  const biomeSkyColorRef = useRef(biome.skyColor);
+  biomeSkyColorRef.current = biome.skyColor;
 
   const isMouseDownRef = useRef(false);
   const lastTimeRef = useRef(performance.now());
@@ -196,6 +202,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     resizeObserver.observe(container);
 
     return () => {
+      environmentLoadIdRef.current++;
+      environmentTextureRef.current?.dispose();
+      environmentTargetRef.current?.dispose();
+      environmentTextureRef.current = null;
+      environmentTargetRef.current = null;
       cancelAnimationFrame(animationFrameId);
       resizeObserver.disconnect();
       renderer.dispose();
@@ -206,9 +217,79 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   // Update Biome & Sky Colors
   useEffect(() => {
     if (!sceneRef.current) return;
-    sceneRef.current.background = new THREE.Color(biome.skyColor);
+    if (!environmentTextureRef.current) {
+      sceneRef.current.background = new THREE.Color(biome.skyColor);
+    }
     sceneRef.current.fog = new THREE.FogExp2(biome.fogColor, 0.0004);
   }, [biome]);
+
+  // Load the selected local HDRI for the sky, environment lighting, and water reflection.
+  useEffect(() => {
+    if (!sceneRef.current || !rendererRef.current) return;
+
+    const scene = sceneRef.current;
+    const renderer = rendererRef.current;
+    const loadId = ++environmentLoadIdRef.current;
+    let cancelled = false;
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+
+    const clearEnvironment = () => {
+      environmentTextureRef.current?.dispose();
+      environmentTargetRef.current?.dispose();
+      environmentTextureRef.current = null;
+      environmentTargetRef.current = null;
+      scene.background = new THREE.Color(biomeSkyColorRef.current);
+      scene.environment = null;
+
+      if (waterMaterialRef.current) {
+        waterMaterialRef.current.uniforms.uEnvironmentMap.value = null;
+        waterMaterialRef.current.uniforms.uHasEnvironment.value = false;
+      }
+    };
+
+    new RGBELoader().load(
+      environment.hdrPath,
+      (texture) => {
+        if (cancelled || loadId !== environmentLoadIdRef.current) {
+          texture.dispose();
+          pmremGenerator.dispose();
+          return;
+        }
+
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        const environmentTarget = pmremGenerator.fromEquirectangular(texture);
+        pmremGenerator.dispose();
+
+        const previousTexture = environmentTextureRef.current;
+        const previousTarget = environmentTargetRef.current;
+        environmentTextureRef.current = texture;
+        environmentTargetRef.current = environmentTarget;
+
+        scene.background = texture;
+        scene.environment = environmentTarget.texture;
+
+        if (waterMaterialRef.current) {
+          waterMaterialRef.current.uniforms.uEnvironmentMap.value = texture;
+          waterMaterialRef.current.uniforms.uHasEnvironment.value = true;
+        }
+
+        previousTexture?.dispose();
+        previousTarget?.dispose();
+      },
+      undefined,
+      (error) => {
+        pmremGenerator.dispose();
+        if (cancelled || loadId !== environmentLoadIdRef.current) return;
+        clearEnvironment();
+        console.error(`Unable to load HDRI environment: ${environment.name}`, error);
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [environment]);
 
   // Generate or Update Terrain Mesh Chunks
   useEffect(() => {
@@ -292,7 +373,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     if (waterMeshRef.current) {
       sceneRef.current.remove(waterMeshRef.current);
       if (waterMeshRef.current.geometry) waterMeshRef.current.geometry.dispose();
+      if (waterMeshRef.current.material) {
+        (waterMeshRef.current.material as THREE.Material).dispose();
+      }
       waterMeshRef.current = null;
+      waterMaterialRef.current = null;
     }
 
     if (water.enabled) {
@@ -303,6 +388,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const waterMat = createCustomWaterMaterial(biome);
       waterMat.uniforms.uWaveSpeed.value = water.waveSpeed;
       waterMat.uniforms.uWaveHeight.value = water.waveHeight;
+      waterMat.uniforms.uEnvironmentMap.value = environmentTextureRef.current;
+      waterMat.uniforms.uHasEnvironment.value = Boolean(environmentTextureRef.current);
       waterMaterialRef.current = waterMat;
 
       const waterMesh = new THREE.Mesh(waterGeo, waterMat);
