@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import * as THREE from 'three';
-import { BiomeConfig, NoiseSettings, ErosionSettings, WaterSettings, SculptBrush, LODSettings, PerformanceStats, ActiveTab } from './types';
+import { BiomeConfig, NoiseSettings, ErosionSettings, WaterSettings, SculptBrush, LODSettings, PerformanceStats, ActiveTab, EnvironmentId } from './types';
 import { BIOME_PRESETS } from './data/biomes';
+import { getEnvironmentPreset } from './data/environments';
 import { simulateHydraulicErosion } from './utils/erosion';
 import { Viewport3D } from './components/Viewport3D';
 import { Header } from './components/Header';
@@ -17,6 +18,8 @@ import { Mountain, Palette, Waves, Paintbrush, Cpu, Download } from 'lucide-reac
 export default function App() {
   // State Initialization
   const [currentBiome, setCurrentBiome] = useState<BiomeConfig>(BIOME_PRESETS[0]);
+  const [environmentId, setEnvironmentId] = useState<EnvironmentId>('lakeside-sunrise');
+  const environment = getEnvironmentPreset(environmentId);
 
   const [noise, setNoise] = useState<NoiseSettings>({
     seed: 42,
@@ -258,6 +261,7 @@ export default function App() {
         <div className="flex-1 h-full relative bg-slate-950">
           <Viewport3D
             biome={currentBiome}
+            environment={environment}
             noise={noise}
             water={water}
             lod={lod}

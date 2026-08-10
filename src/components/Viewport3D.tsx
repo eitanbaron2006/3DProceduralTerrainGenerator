@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { BiomeConfig, NoiseSettings, WaterSettings, LODSettings, SculptBrush, PerformanceStats } from '../types';
+import { BiomeConfig, NoiseSettings, WaterSettings, LODSettings, SculptBrush, PerformanceStats, EnvironmentPreset } from '../types';
 import { createSeededNoise, getProceduralHeight } from '../utils/noise';
 import { createCustomTerrainMaterial, createCustomWaterMaterial } from '../utils/shaders';
 
@@ -16,6 +16,7 @@ export function removeRendererCanvas(
 
 interface Viewport3DProps {
   biome: BiomeConfig;
+  environment: EnvironmentPreset;
   noise: NoiseSettings;
   water: WaterSettings;
   lod: LODSettings;
@@ -29,6 +30,7 @@ interface Viewport3DProps {
 
 export const Viewport3D: React.FC<Viewport3DProps> = ({
   biome,
+  environment,
   noise,
   water,
   lod,

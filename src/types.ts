@@ -21,6 +21,19 @@ export interface BiomeConfig {
   layers: BiomeLayer[];
 }
 
+export type EnvironmentId =
+  | 'lakeside-sunrise'
+  | 'table-mountain'
+  | 'sky-on-fire'
+  | 'clear-night';
+
+export interface EnvironmentPreset {
+  id: EnvironmentId;
+  name: string;
+  timeOfDay: string;
+  hdrPath: string;
+}
+
 export interface NoiseSettings {
   seed: number;
   scale: number;        // Overall noise scale
