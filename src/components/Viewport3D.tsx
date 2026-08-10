@@ -5,6 +5,15 @@ import { BiomeConfig, NoiseSettings, WaterSettings, LODSettings, SculptBrush, Pe
 import { createSeededNoise, getProceduralHeight } from '../utils/noise';
 import { createCustomTerrainMaterial, createCustomWaterMaterial } from '../utils/shaders';
 
+export function removeRendererCanvas(
+  container: Pick<HTMLElement, 'contains' | 'removeChild'>,
+  canvas: HTMLCanvasElement
+) {
+  if (container.contains(canvas)) {
+    container.removeChild(canvas);
+  }
+}
+
 interface Viewport3DProps {
   biome: BiomeConfig;
   noise: NoiseSettings;
@@ -50,8 +59,10 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const width = containerRef.current.clientWidth || window.innerWidth;
-    const height = containerRef.current.clientHeight || window.innerHeight;
+    const container = containerRef.current;
+
+    const width = container.clientWidth || window.innerWidth;
+    const height = container.clientHeight || window.innerHeight;
     const initialAspect = height > 0 ? width / height : 16 / 9;
 
     // 1. Scene
@@ -81,7 +92,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    containerRef.current.appendChild(renderer.domElement);
+    container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
     // 4. Controls
@@ -180,17 +191,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       }
     });
 
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
+    resizeObserver.observe(container);
 
     return () => {
       cancelAnimationFrame(animationFrameId);
       resizeObserver.disconnect();
       renderer.dispose();
-      if (containerRef.current && renderer.domElement) {
-        containerRef.current.removeChild(renderer.domElement);
-      }
+      removeRendererCanvas(container, renderer.domElement);
     };
   }, []);
 
