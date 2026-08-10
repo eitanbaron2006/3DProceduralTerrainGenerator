@@ -168,3 +168,41 @@ test('lowers and offsets the ocean to keep shorelines stable', () => {
   assert.ok(config.polygonOffsetFactor >= 2);
   assert.ok(config.polygonOffsetUnits >= 8);
 });
+
+test('uses enough ocean subdivisions for real vertex wave motion', () => {
+  const getStableWaterRenderConfig = (
+    viewportModule as unknown as Record<string, unknown>
+  ).getStableWaterRenderConfig;
+
+  assert.equal(typeof getStableWaterRenderConfig, 'function');
+  const config = (getStableWaterRenderConfig as (seaLevel: number) => {
+    subdivisions: number;
+  })(8);
+
+  assert.ok(config.subdivisions >= 96);
+});
+
+test('packs terrain heights into a normalized texture payload for water depth', () => {
+  const createTerrainHeightTexturePayload = (
+    viewportModule as unknown as Record<string, unknown>
+  ).createTerrainHeightTexturePayload;
+
+  assert.equal(typeof createTerrainHeightTexturePayload, 'function');
+  const payload = (createTerrainHeightTexturePayload as (
+    heights: Float32Array,
+    resolution: number
+  ) => {
+    data: Uint8Array;
+    minHeight: number;
+    heightRange: number;
+  })(new Float32Array([0, 4, 8, 16]), 2);
+
+  assert.equal(payload.minHeight, 0);
+  assert.equal(payload.heightRange, 16);
+  assert.equal(payload.data.length, 16);
+  assert.equal(payload.data[0], 0);
+  assert.equal(payload.data[4], 64);
+  assert.equal(payload.data[8], 128);
+  assert.equal(payload.data[12], 255);
+  assert.equal(payload.data[3], 255);
+});

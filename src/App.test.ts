@@ -12,6 +12,7 @@ test('starts in the ocean island presentation shown in the reference screenshots
   assert.equal(DEFAULT_ENVIRONMENT_ID, 'sky-on-fire');
   assert.equal(DEFAULT_NOISE_SETTINGS.islandGradient, true);
   assert.ok(DEFAULT_NOISE_SETTINGS.heightMultiplier <= 28);
-  assert.ok(DEFAULT_WATER_SETTINGS.waveHeight >= 0.6);
-  assert.ok(DEFAULT_WATER_SETTINGS.waveSpeed >= 1.2);
+  assert.ok(DEFAULT_WATER_SETTINGS.waveHeight >= 0.65);
+  assert.ok(DEFAULT_WATER_SETTINGS.waveHeight <= 0.85);
+  assert.ok(DEFAULT_WATER_SETTINGS.waveSpeed >= 1.5);
 });

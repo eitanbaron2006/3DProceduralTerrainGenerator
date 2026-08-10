@@ -100,8 +100,71 @@ export function getStableWaterRenderConfig(seaLevel: number) {
     renderLevel: seaLevel - 0.18,
     renderOrder: 1,
     polygonOffsetFactor: 3,
-    polygonOffsetUnits: 12
+    polygonOffsetUnits: 12,
+    subdivisions: 160
   };
+}
+
+export interface TerrainHeightTexturePayload {
+  data: Uint8Array;
+  minHeight: number;
+  heightRange: number;
+}
+
+export function createTerrainHeightTexturePayload(
+  heights: Float32Array,
+  resolution: number
+): TerrainHeightTexturePayload {
+  const sampleCount = resolution * resolution;
+  let minHeight = Number.POSITIVE_INFINITY;
+  let maxHeight = Number.NEGATIVE_INFINITY;
+
+  for (let i = 0; i < sampleCount; i++) {
+    const height = heights[i];
+    if (!Number.isFinite(height)) continue;
+    minHeight = Math.min(minHeight, height);
+    maxHeight = Math.max(maxHeight, height);
+  }
+
+  if (!Number.isFinite(minHeight) || !Number.isFinite(maxHeight)) {
+    minHeight = 0;
+    maxHeight = 1;
+  }
+
+  const heightRange = Math.max(1e-6, maxHeight - minHeight);
+  const data = new Uint8Array(sampleCount * 4);
+
+  for (let i = 0; i < sampleCount; i++) {
+    const safeHeight = Number.isFinite(heights[i]) ? heights[i] : minHeight;
+    const normalizedHeight = THREE.MathUtils.clamp(
+      (safeHeight - minHeight) / heightRange,
+      0,
+      1
+    );
+    const encodedHeight = Math.round(normalizedHeight * 255);
+    const offset = i * 4;
+    data[offset] = encodedHeight;
+    data[offset + 1] = encodedHeight;
+    data[offset + 2] = encodedHeight;
+    data[offset + 3] = 255;
+  }
+
+  return { data, minHeight, heightRange };
+}
+
+function applyTerrainHeightTextureToWaterMaterial(
+  material: THREE.ShaderMaterial,
+  texture: THREE.DataTexture | null,
+  meta: TerrainHeightTexturePayload,
+  terrainWorldSize: number,
+  waterLevel: number
+) {
+  material.uniforms.uTerrainHeightMap.value = texture;
+  material.uniforms.uHasTerrainHeightMap.value = Boolean(texture);
+  material.uniforms.uTerrainWorldSize.value = terrainWorldSize;
+  material.uniforms.uTerrainHeightMin.value = meta.minHeight;
+  material.uniforms.uTerrainHeightRange.value = meta.heightRange;
+  material.uniforms.uWaterLevel.value = waterLevel;
 }
 
 export function getAtmosphereSunVector(atmosphere: Pick<AtmosphereConfig, 'sunDirection'>) {
@@ -151,6 +214,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const brushMarkerRef = useRef<THREE.Mesh | null>(null);
   const skyboxTextureRef = useRef<THREE.Texture | null>(null);
   const waterNormalTextureRef = useRef<THREE.Texture | null>(null);
+  const terrainHeightTextureRef = useRef<THREE.DataTexture | null>(null);
+  const terrainHeightTextureMetaRef = useRef<TerrainHeightTexturePayload>({
+    data: new Uint8Array(4),
+    minHeight: 0,
+    heightRange: 1
+  });
   const skyboxLoadIdRef = useRef(0);
   const atmosphereRef = useRef(getEffectiveAtmosphere(biome, environment));
   atmosphereRef.current = getEffectiveAtmosphere(biome, environment);
@@ -354,6 +423,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       sunLightRef.current = null;
       waterNormalTextureRef.current?.dispose();
       waterNormalTextureRef.current = null;
+      terrainHeightTextureRef.current?.dispose();
+      terrainHeightTextureRef.current = null;
       cancelAnimationFrame(animationFrameId);
       resizeObserver.disconnect();
       renderer.dispose();
@@ -514,6 +585,36 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       onHeightGridUpdate(currentHeights);
     }
 
+    const heightTexturePayload = createTerrainHeightTexturePayload(currentHeights, gridRes);
+    const heightTexture = new THREE.DataTexture(
+      heightTexturePayload.data,
+      gridRes,
+      gridRes,
+      THREE.RGBAFormat
+    );
+    heightTexture.wrapS = THREE.ClampToEdgeWrapping;
+    heightTexture.wrapT = THREE.ClampToEdgeWrapping;
+    heightTexture.minFilter = THREE.LinearFilter;
+    heightTexture.magFilter = THREE.LinearFilter;
+    heightTexture.generateMipmaps = false;
+    heightTexture.flipY = false;
+    heightTexture.colorSpace = THREE.NoColorSpace;
+    heightTexture.needsUpdate = true;
+
+    terrainHeightTextureRef.current?.dispose();
+    terrainHeightTextureRef.current = heightTexture;
+    terrainHeightTextureMetaRef.current = heightTexturePayload;
+
+    if (waterMaterialRef.current) {
+      applyTerrainHeightTextureToWaterMaterial(
+        waterMaterialRef.current,
+        heightTexture,
+        heightTexturePayload,
+        worldSize,
+        water.level
+      );
+    }
+
     // Create Terrain Material
     const material = createCustomTerrainMaterial(biome, lod.wireframe);
     material.uniforms.uHeightScale.value = Math.max(10, noise.heightMultiplier * 1.2);
@@ -577,12 +678,21 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     if (water.enabled) {
       const { oceanSize } = getOceanViewConfig(water.level);
       const waterRenderConfig = getStableWaterRenderConfig(water.level);
-      const waterGeo = new THREE.PlaneGeometry(oceanSize, oceanSize, 1, 1);
+      const waterGeo = new THREE.PlaneGeometry(
+        oceanSize,
+        oceanSize,
+        waterRenderConfig.subdivisions,
+        waterRenderConfig.subdivisions
+      );
       waterGeo.rotateX(-Math.PI / 2);
 
       const waterMat = createCustomWaterMaterial(biome);
       waterMat.uniforms.uWaveSpeed.value = water.waveSpeed;
       waterMat.uniforms.uWaveHeight.value = water.waveHeight;
+      waterMat.uniforms.uWaterLevel.value = water.level;
+      waterMat.uniforms.uShallowWaterColor.value.set(water.shallowColor);
+      waterMat.uniforms.uShallowOpacity.value = THREE.MathUtils.clamp(water.transparency * 0.55, 0.38, 0.58);
+      waterMat.uniforms.uDeepOpacity.value = THREE.MathUtils.clamp(0.82 + water.transparency * 0.18, 0.94, 0.995);
       waterMat.polygonOffsetFactor = waterRenderConfig.polygonOffsetFactor;
       waterMat.polygonOffsetUnits = waterRenderConfig.polygonOffsetUnits;
       waterMat.uniforms.uWaterNormalMap.value = waterNormalTextureRef.current;
@@ -590,6 +700,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       waterMat.uniforms.uSkyReflectionMap.value = skyboxTextureRef.current;
       waterMat.uniforms.uHasSkyReflection.value = Boolean(skyboxTextureRef.current);
       waterMat.uniforms.uSunDirection.value.copy(getAtmosphereSunVector(atmosphereRef.current));
+      applyTerrainHeightTextureToWaterMaterial(
+        waterMat,
+        terrainHeightTextureRef.current,
+        terrainHeightTextureMetaRef.current,
+        200,
+        water.level
+      );
       waterMaterialRef.current = waterMat;
 
       const waterMesh = new THREE.Mesh(waterGeo, waterMat);
