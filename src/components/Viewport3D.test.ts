@@ -43,3 +43,22 @@ test('snaps the infinite ocean origin around positive and negative camera positi
   assert.deepEqual(getPosition(17, -17, 16), { x: 16, z: -16 });
   assert.deepEqual(getPosition(-9, 9, 16), { x: -16, z: 16 });
 });
+
+test('keeps the default horizon centered and the ocean cutoff below half a percent', () => {
+  const getOceanViewConfig = (
+    viewportModule as unknown as Record<string, unknown>
+  ).getOceanViewConfig;
+
+  assert.equal(typeof getOceanViewConfig, 'function');
+  const config = (getOceanViewConfig as (seaLevel: number) => {
+    cameraPosition: { x: number; y: number; z: number };
+    target: { x: number; y: number; z: number };
+    cameraFar: number;
+    oceanSize: number;
+    horizonGapFraction: number;
+  })(8);
+
+  assert.equal(config.cameraPosition.y, config.target.y);
+  assert.ok(config.oceanSize / 2 > config.cameraFar);
+  assert.ok(config.horizonGapFraction < 0.005);
+});

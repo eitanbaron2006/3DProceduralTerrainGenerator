@@ -3,27 +3,27 @@ import { EnvironmentPreset } from '../types';
 export const ENVIRONMENT_PRESETS: EnvironmentPreset[] = [
   {
     id: 'lakeside-sunrise',
-    name: 'Lakeside Sunrise',
+    name: 'Qwantani Sunrise',
     timeOfDay: 'Sunrise',
-    hdrPath: '/hdri/lakeside_sunrise_1k.hdr'
+    hdrPath: '/hdri/qwantani_sunrise_puresky_1k.hdr'
   },
   {
     id: 'table-mountain',
-    name: 'Table Mountain',
+    name: 'Clear Midday',
     timeOfDay: 'Day',
-    hdrPath: '/hdri/table_mountain_2_1k.hdr'
+    hdrPath: '/hdri/qwantani_noon_puresky_1k.hdr'
   },
   {
     id: 'sky-on-fire',
-    name: 'Sky on Fire',
+    name: 'Rosendal Sunset',
     timeOfDay: 'Sunset',
-    hdrPath: '/hdri/the_sky_is_on_fire_1k.hdr'
+    hdrPath: '/hdri/rosendal_park_sunset_puresky_1k.hdr'
   },
   {
     id: 'clear-night',
-    name: 'Clear Night',
+    name: 'Milky Way Night',
     timeOfDay: 'Night',
-    hdrPath: '/hdri/rogland_clear_night_1k.hdr'
+    hdrPath: '/hdri/qwantani_night_puresky_1k.hdr'
   }
 ];
 

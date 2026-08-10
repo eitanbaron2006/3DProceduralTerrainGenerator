@@ -22,6 +22,32 @@ export function getInfiniteWaterPosition(x: number, z: number, snapSize = 16) {
   };
 }
 
+export function getOceanViewConfig(seaLevel: number) {
+  const verticalFovDegrees = 55;
+  const cameraFar = 10000;
+  const oceanSize = 24000;
+  const maxDistance = 600;
+  const maxPolarAngle = Math.PI / 2 - 0.005;
+  const cameraPosition = { x: 0, y: 30, z: 150 };
+  const target = { x: 0, y: 30, z: 0 };
+  const maxCameraY = target.y + maxDistance * Math.cos(maxPolarAngle);
+  const heightAboveWater = Math.max(0, maxCameraY - seaLevel);
+  const angularGap = Math.asin(Math.min(0.999, heightAboveWater / cameraFar));
+  const halfFov = THREE.MathUtils.degToRad(verticalFovDegrees / 2);
+  const horizonGapFraction = Math.tan(angularGap) / (2 * Math.tan(halfFov));
+
+  return {
+    verticalFovDegrees,
+    cameraFar,
+    oceanSize,
+    maxDistance,
+    maxPolarAngle,
+    cameraPosition,
+    target,
+    horizonGapFraction
+  };
+}
+
 interface Viewport3DProps {
   biome: BiomeConfig;
   environment: EnvironmentPreset;
@@ -62,6 +88,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const brushMarkerRef = useRef<THREE.Mesh | null>(null);
   const environmentTextureRef = useRef<THREE.DataTexture | null>(null);
   const environmentTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
+  const waterNormalTextureRef = useRef<THREE.Texture | null>(null);
   const environmentLoadIdRef = useRef(0);
   const biomeSkyColorRef = useRef(biome.skyColor);
   biomeSkyColorRef.current = biome.skyColor;
@@ -75,26 +102,34 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     if (!containerRef.current) return;
 
     const container = containerRef.current;
+    let disposed = false;
 
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
     const initialAspect = height > 0 ? width / height : 16 / 9;
+    const viewConfig = getOceanViewConfig(water.level);
 
     // 1. Scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(biome.skyColor);
+    scene.backgroundIntensity = 0.72;
+    scene.environmentIntensity = 0.7;
     scene.fog = new THREE.FogExp2(biome.fogColor, 0.0004);
     sceneRef.current = scene;
 
     // 2. Camera
     const camera = new THREE.PerspectiveCamera(
-      55,
+      viewConfig.verticalFovDegrees,
       initialAspect,
       0.1,
-      1500
+      viewConfig.cameraFar
     );
-    camera.position.set(0, 60, 130);
-    camera.lookAt(0, 10, 0);
+    camera.position.set(
+      viewConfig.cameraPosition.x,
+      viewConfig.cameraPosition.y,
+      viewConfig.cameraPosition.z
+    );
+    camera.lookAt(viewConfig.target.x, viewConfig.target.y, viewConfig.target.z);
     cameraRef.current = camera;
 
     // 3. Renderer
@@ -105,6 +140,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.9;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
@@ -114,10 +151,10 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    controls.maxPolarAngle = viewConfig.maxPolarAngle;
     controls.minDistance = 5;
-    controls.maxDistance = 600;
-    controls.target.set(0, 0, 0);
+    controls.maxDistance = viewConfig.maxDistance;
+    controls.target.set(viewConfig.target.x, viewConfig.target.y, viewConfig.target.z);
     controls.update();
     controlsRef.current = controls;
 
@@ -157,6 +194,31 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     brushMarker.visible = false;
     scene.add(brushMarker);
     brushMarkerRef.current = brushMarker;
+
+    // Seamless surface detail breaks up repeating procedural wave bands.
+    new THREE.TextureLoader().load(
+      '/textures/waternormals.jpg',
+      (texture) => {
+        if (disposed) {
+          texture.dispose();
+          return;
+        }
+
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.colorSpace = THREE.NoColorSpace;
+        waterNormalTextureRef.current = texture;
+
+        if (waterMaterialRef.current) {
+          waterMaterialRef.current.uniforms.uWaterNormalMap.value = texture;
+          waterMaterialRef.current.uniforms.uHasWaterNormalMap.value = true;
+        }
+      },
+      undefined,
+      (error) => {
+        if (!disposed) console.error('Unable to load water normal map', error);
+      }
+    );
 
     // 8. Animation Loop
     let animationFrameId: number;
@@ -215,11 +277,14 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     resizeObserver.observe(container);
 
     return () => {
+      disposed = true;
       environmentLoadIdRef.current++;
       environmentTextureRef.current?.dispose();
       environmentTargetRef.current?.dispose();
       environmentTextureRef.current = null;
       environmentTargetRef.current = null;
+      waterNormalTextureRef.current?.dispose();
+      waterNormalTextureRef.current = null;
       cancelAnimationFrame(animationFrameId);
       resizeObserver.disconnect();
       renderer.dispose();
@@ -394,8 +459,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     }
 
     if (water.enabled) {
-      const worldSize = 3200;
-      const waterGeo = new THREE.PlaneGeometry(worldSize, worldSize, 128, 128);
+      const { oceanSize } = getOceanViewConfig(water.level);
+      const waterGeo = new THREE.PlaneGeometry(oceanSize, oceanSize, 1, 1);
       waterGeo.rotateX(-Math.PI / 2);
 
       const waterMat = createCustomWaterMaterial(biome);
@@ -403,6 +468,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       waterMat.uniforms.uWaveHeight.value = water.waveHeight;
       waterMat.uniforms.uEnvironmentMap.value = environmentTextureRef.current;
       waterMat.uniforms.uHasEnvironment.value = Boolean(environmentTextureRef.current);
+      waterMat.uniforms.uWaterNormalMap.value = waterNormalTextureRef.current;
+      waterMat.uniforms.uHasWaterNormalMap.value = Boolean(waterNormalTextureRef.current);
       waterMaterialRef.current = waterMat;
 
       const waterMesh = new THREE.Mesh(waterGeo, waterMat);

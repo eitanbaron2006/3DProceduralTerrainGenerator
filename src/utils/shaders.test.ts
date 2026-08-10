@@ -8,15 +8,23 @@ test('water material exposes an optional HDR environment texture', () => {
 
   assert.ok(material.uniforms.uEnvironmentMap);
   assert.equal(material.uniforms.uHasEnvironment.value, false);
+  assert.ok(material.uniforms.uWaterNormalMap);
+  assert.equal(material.uniforms.uHasWaterNormalMap.value, false);
+  assert.match(material.fragmentShader, /sampleNormalLayer/);
 
   material.dispose();
 });
 
-test('water material blends open-ocean foam without a binary dot pattern', () => {
+test('water material uses deep scattering, multidirectional waves, and no offshore foam', () => {
   const material = createCustomWaterMaterial(BIOME_PRESETS[0]);
 
-  assert.match(material.fragmentShader, /float foamFactor = smoothstep/);
-  assert.doesNotMatch(material.fragmentShader, /if \(foamNoise > 0\.6\)/);
+  assert.ok(material.uniforms.uDeepWaterColor);
+  assert.ok(material.uniforms.uSurfaceWaterColor);
+  assert.match(material.fragmentShader, /accumulateWaveSlope/);
+  assert.match(material.fragmentShader, /float fresnelSchlick/);
+  assert.doesNotMatch(material.fragmentShader, /foam/i);
+  assert.equal(material.transparent, false);
+  assert.equal(material.depthWrite, true);
 
   material.dispose();
 });
