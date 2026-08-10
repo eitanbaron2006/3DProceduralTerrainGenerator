@@ -199,11 +199,12 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
       float spec = pow(max(dot(norm, halfDir), 0.0), 128.0);
       col += vec3(1.0, 0.95, 0.8) * spec * 0.8;
 
-      // Shoreline foam pattern simulation
-      float foamNoise = sin(vWorldPosition.x * 2.0 + uTime * 3.0) * cos(vWorldPosition.z * 2.0 + uTime * 2.0);
-      if (foamNoise > 0.6) {
-        col = mix(col, uFoamColor, 0.4);
-      }
+      // Broad, softly blended foam avoids a repeating binary dot pattern offshore.
+      float foamNoise = sin(vWorldPosition.x * 0.055 + uTime * 0.6)
+        * cos(vWorldPosition.z * 0.07 - uTime * 0.45);
+      foamNoise += sin((vWorldPosition.x + vWorldPosition.z) * 0.12 + uTime * 0.8) * 0.55;
+      float foamFactor = smoothstep(1.2, 1.48, foamNoise) * 0.12;
+      col = mix(col, uFoamColor, foamFactor);
 
       // Fade the ocean into the atmospheric horizon before its geometry ends.
       float dist = length(vWorldPosition - cameraPosition);
