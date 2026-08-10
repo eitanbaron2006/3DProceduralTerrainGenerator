@@ -117,18 +117,14 @@ export function createCustomTerrainMaterial(biome: BiomeConfig, wireframe: boole
  */
 export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMaterial {
   const waterColor = new THREE.Color(biome.waterColor);
-  const foamColor = new THREE.Color(biome.waterFoamColor);
   const deepWaterColor = waterColor
     .clone()
-    .multiplyScalar(0.18)
-    .lerp(new THREE.Color('#041725'), 0.72);
+    .multiplyScalar(0.08)
+    .lerp(new THREE.Color('#041722'), 0.86);
   const surfaceWaterColor = waterColor
     .clone()
-    .multiplyScalar(0.42)
-    .lerp(new THREE.Color('#164d5f'), 0.5);
-  const shallowWaterColor = waterColor
-    .clone()
-    .lerp(new THREE.Color('#48c7ba'), 0.58);
+    .multiplyScalar(0.22)
+    .lerp(new THREE.Color('#123946'), 0.72);
 
   const vertexShader = /* glsl */ `
     varying vec3 vWorldPosition;
@@ -143,8 +139,6 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
   const fragmentShader = /* glsl */ `
     uniform vec3 uDeepWaterColor;
     uniform vec3 uSurfaceWaterColor;
-    uniform vec3 uShallowWaterColor;
-    uniform vec3 uFoamColor;
     uniform vec3 uSkyFallback;
     uniform float uTime;
     uniform float uWaveSpeed;
@@ -194,25 +188,26 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
 
     vec2 blendNormalLayers(vec2 point) {
       vec2 swellWarp = vec2(
-        ripple(point, vec2(0.91, 0.21), 0.012, 0.07),
-        ripple(point, vec2(-0.28, 0.96), 0.01, -0.055)
-      ) * 4.2;
+        sin(dot(point, vec2(0.0061, 0.0027)) + uTime * 0.036),
+        cos(dot(point, vec2(-0.0023, 0.0057)) - uTime * 0.028)
+      ) * 7.5;
       vec2 warpedPoint = point + swellWarp;
 
-      if (uHasWaterNormalMap) {
-        vec2 normalDetail = sampleNormalLayer(
-          warpedPoint,
-          0.0075,
-          vec2(0.004, -0.002),
-          0.21
-        ) * 0.7;
-        return normalDetail;
-      }
-
-      return vec2(
+      vec2 normalDetail = vec2(
         ripple(warpedPoint, vec2(0.78, 0.31), 0.035, 0.16),
         ripple(warpedPoint, vec2(-0.22, 0.91), 0.029, -0.12)
-      ) * 0.45;
+      ) * 0.55;
+
+      if (uHasWaterNormalMap) {
+        normalDetail = sampleNormalLayer(
+          warpedPoint,
+          0.011,
+          vec2(0.009, -0.006),
+          0.21
+        ) * 1.05;
+      }
+
+      return normalDetail;
     }
 
     void main() {
@@ -223,9 +218,9 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
       vec2 point = vWorldPosition.xz;
       vec2 fineNormals = blendNormalLayers(point);
       vec2 broadSwell = vec2(
-        ripple(point, vec2(0.82, 0.31), 0.019, 0.12),
-        ripple(point, vec2(-0.22, 0.91), 0.017, -0.09)
-      ) * 0.04;
+        sin(dot(point, normalize(vec2(0.82, 0.31))) * 0.027 + uTime * uWaveSpeed * 0.16),
+        sin(dot(point, normalize(vec2(-0.22, 0.91))) * 0.021 - uTime * uWaveSpeed * 0.11)
+      ) * 0.055;
 
       float normalFade = mix(0.18, 1.0, distantDetail);
       vec2 slope = (fineNormals * 0.42 + broadSwell) * uWaveHeight * uNormalStrength * normalFade;
@@ -238,15 +233,8 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
       vec3 sunDir = normalize(uSunDirection);
       float sunFacing = max(dot(norm, sunDir), 0.0);
       float windVariation = ripple(point, vec2(0.37, 0.93), 0.006, 0.04) * 0.5 + 0.5;
-      float islandDistance = length(point);
-      float reefBand = smoothstep(34.0, 58.0, islandDistance)
-        * (1.0 - smoothstep(78.0, 118.0, islandDistance));
-      float brokenFoam = ripple(point, vec2(0.68, -0.74), 0.16, 0.18) * 0.55
-        + ripple(point, vec2(-0.21, 0.98), 0.11, -0.12) * 0.45;
-      float shoreFoam = reefBand * smoothstep(0.52, 0.88, brokenFoam) * (1.0 - horizonBlend * 0.62);
-      float depthTone = 0.24 + sunFacing * 0.11 + windVariation * 0.04;
+      float depthTone = 0.18 + sunFacing * 0.14 + windVariation * 0.07;
       vec3 waterBody = mix(uDeepWaterColor, uSurfaceWaterColor, depthTone);
-      waterBody = mix(waterBody, uShallowWaterColor, reefBand * 0.24);
 
       vec3 reflectionDirection = reflect(-viewDir, norm);
       vec3 reflectionColor = uSkyFallback;
@@ -265,10 +253,8 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
 
       float reflectionWeight = mix(0.28, 0.92, fresnel);
       reflectionWeight = mix(reflectionWeight, 0.86, horizonBlend * 0.72);
-      reflectionWeight += reefBand * 0.08;
       vec3 col = mix(waterBody, reflectionColor, reflectionWeight);
 
-      col = mix(col, uFoamColor, shoreFoam * 0.1);
       col = mix(col, uSkyFallback, horizonBlend * 0.06);
 
       gl_FragColor = vec4(col, 1.0);
@@ -288,8 +274,6 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
     uniforms: {
       uDeepWaterColor: { value: deepWaterColor },
       uSurfaceWaterColor: { value: surfaceWaterColor },
-      uShallowWaterColor: { value: shallowWaterColor },
-      uFoamColor: { value: foamColor },
       uSkyFallback: { value: new THREE.Color(biome.skyColor) },
       uTime: { value: 0 },
       uWaveSpeed: { value: 1.5 },
@@ -300,7 +284,7 @@ export function createCustomWaterMaterial(biome: BiomeConfig): THREE.ShaderMater
       uHasSkyReflection: { value: false },
       uWaterNormalMap: { value: null },
       uHasWaterNormalMap: { value: false },
-      uNormalStrength: { value: 0.5 },
+      uNormalStrength: { value: 0.82 },
       uReflectionStrength: { value: 1.16 }
     }
   });

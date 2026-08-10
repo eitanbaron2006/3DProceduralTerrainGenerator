@@ -39,8 +39,8 @@ export const DEFAULT_WATER_SETTINGS: WaterSettings = {
   enabled: true,
   level: 8.0,
   transparency: 0.8,
-  waveSpeed: 0.55,
-  waveHeight: 0.38,
+  waveSpeed: 1.2,
+  waveHeight: 0.6,
   color: '#0b4f65',
   shallowColor: '#42c6bf',
   foamWidth: 0.5
