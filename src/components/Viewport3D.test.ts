@@ -53,17 +53,20 @@ test('keeps the default horizon centered and the ocean cutoff below half a perce
   const config = (getOceanViewConfig as (seaLevel: number) => {
     cameraPosition: { x: number; y: number; z: number };
     target: { x: number; y: number; z: number };
+    cameraNear: number;
     cameraFar: number;
     oceanSize: number;
     horizonGapFraction: number;
   })(8);
 
   assert.equal(config.cameraPosition.y, config.target.y);
+  assert.ok(config.cameraNear >= 1);
+  assert.ok(config.cameraFar / config.cameraNear <= 10000);
   assert.ok(config.oceanSize / 2 > config.cameraFar);
   assert.ok(config.horizonGapFraction < 0.005);
 });
 
-test('renders HDRI skyboxes without background blur', () => {
+test('renders visible HDRI skyboxes as a crisp scene background', () => {
   const getSkyboxRenderConfig = (
     viewportModule as unknown as Record<string, unknown>
   ).getSkyboxRenderConfig;
@@ -71,7 +74,80 @@ test('renders HDRI skyboxes without background blur', () => {
   assert.equal(typeof getSkyboxRenderConfig, 'function');
   const config = (getSkyboxRenderConfig as () => {
     backgroundBlurriness: number;
+    mapping: string;
+    colorSpace: string;
+    minFilter: string;
+    magFilter: string;
+    generateMipmaps: boolean;
   })();
 
   assert.equal(config.backgroundBlurriness, 0);
+  assert.equal(config.mapping, 'CubeReflectionMapping');
+  assert.equal(config.colorSpace, 'SRGBColorSpace');
+  assert.equal(config.minFilter, 'LinearFilter');
+  assert.equal(config.magFilter, 'LinearFilter');
+  assert.equal(config.generateMipmaps, false);
+});
+
+test('loads water reflections as skybox-synchronized panorama textures', () => {
+  const getWaterReflectionTextureConfig = (
+    viewportModule as unknown as Record<string, unknown>
+  ).getWaterReflectionTextureConfig;
+
+  assert.equal(typeof getWaterReflectionTextureConfig, 'function');
+  const config = (getWaterReflectionTextureConfig as () => {
+    mapping: string;
+    colorSpace: string;
+    wrapS: string;
+    wrapT: string;
+    minFilter: string;
+    magFilter: string;
+    generateMipmaps: boolean;
+  })();
+
+  assert.equal(config.mapping, 'EquirectangularReflectionMapping');
+  assert.equal(config.colorSpace, 'SRGBColorSpace');
+  assert.equal(config.wrapS, 'RepeatWrapping');
+  assert.equal(config.wrapT, 'ClampToEdgeWrapping');
+  assert.equal(config.minFilter, 'LinearFilter');
+  assert.equal(config.magFilter, 'LinearFilter');
+  assert.equal(config.generateMipmaps, false);
+});
+
+test('uses renderer settings that preserve viewport performance', () => {
+  const getRendererQualityConfig = (
+    viewportModule as unknown as Record<string, unknown>
+  ).getRendererQualityConfig;
+
+  assert.equal(typeof getRendererQualityConfig, 'function');
+  const config = (getRendererQualityConfig as () => {
+    preserveDrawingBuffer: boolean;
+    maxPixelRatio: number;
+    shadowMapSize: number;
+    shadowsAutoUpdate: boolean;
+  })();
+
+  assert.equal(config.preserveDrawingBuffer, false);
+  assert.ok(config.maxPixelRatio <= 1);
+  assert.ok(config.shadowMapSize <= 1024);
+  assert.equal(config.shadowsAutoUpdate, false);
+});
+
+test('lowers and offsets the ocean to keep shorelines stable', () => {
+  const getStableWaterRenderConfig = (
+    viewportModule as unknown as Record<string, unknown>
+  ).getStableWaterRenderConfig;
+
+  assert.equal(typeof getStableWaterRenderConfig, 'function');
+  const config = (getStableWaterRenderConfig as (seaLevel: number) => {
+    renderLevel: number;
+    renderOrder: number;
+    polygonOffsetFactor: number;
+    polygonOffsetUnits: number;
+  })(8);
+
+  assert.ok(config.renderLevel <= 7.9);
+  assert.ok(config.renderOrder > 0);
+  assert.ok(config.polygonOffsetFactor >= 2);
+  assert.ok(config.polygonOffsetUnits >= 8);
 });

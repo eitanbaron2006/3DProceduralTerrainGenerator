@@ -23,6 +23,13 @@ test('uses high-resolution sky-only HDRIs so the procedural world has one crisp 
     assert.equal(existsSync(join(process.cwd(), 'public', preset.hdrPath)), true);
     assert.match(preset.skyboxPath, /_puresky\.jpg$/);
     assert.equal(existsSync(join(process.cwd(), 'public', preset.skyboxPath)), true);
+    assert.equal(preset.skyboxFacePaths.length, 6);
+    for (const facePath of preset.skyboxFacePaths) {
+      assert.match(facePath, /\/hdri\/cubemaps\/.+\/(px|nx|py|ny|pz|nz)\.jpg$/);
+      assert.equal(existsSync(join(process.cwd(), 'public', facePath)), true);
+    }
+    assert.match(preset.waterReflectionPath, /\/hdri\/water-reflections\/.+\.jpg$/);
+    assert.equal(existsSync(join(process.cwd(), 'public', preset.waterReflectionPath)), true);
   }
 });
 
@@ -40,7 +47,12 @@ test('pairs each HDRI with atmosphere values that match its time of day', () => 
     assert.match(preset.atmosphere.sunColor, /^#[0-9a-f]{6}$/i);
     assert.ok(preset.atmosphere.fogDensity >= 0);
     assert.ok(preset.atmosphere.backgroundIntensity > 0);
+    assert.ok(preset.atmosphere.skyboxIntensity > 0);
     assert.ok(preset.atmosphere.environmentIntensity > 0);
+    assert.equal(preset.atmosphere.sunDirection.length, 3);
+    const sunLength = Math.hypot(...preset.atmosphere.sunDirection);
+    assert.ok(sunLength > 0.99 && sunLength < 1.01);
+    assert.ok(preset.atmosphere.sunDirection[1] > 0);
   }
 });
 

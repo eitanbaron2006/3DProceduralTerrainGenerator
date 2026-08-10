@@ -33,6 +33,8 @@ export interface EnvironmentPreset {
   timeOfDay: string;
   hdrPath: string;
   skyboxPath: string;
+  skyboxFacePaths: [string, string, string, string, string, string];
+  waterReflectionPath: string;
   atmosphere: AtmosphereConfig;
 }
 
@@ -42,9 +44,11 @@ export interface AtmosphereConfig {
   sunColor: string;
   fogDensity: number;
   backgroundIntensity: number;
+  skyboxIntensity: number;
   environmentIntensity: number;
   ambientLightIntensity: number;
   sunLightIntensity: number;
+  sunDirection: [number, number, number];
 }
 
 export interface NoiseSettings {
